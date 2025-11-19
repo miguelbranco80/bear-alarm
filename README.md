@@ -76,11 +76,19 @@ docker-compose down
 **Option A: macOS App (Easiest for non-technical users)**
 
 ```bash
+# Install SDL2
+brew install sdl2
+
+# Install Python dependencies (first time only)
+uv sync
+
 # Create the macOS application
 ./create-app.sh
 ```
 
 Then double-click `Bear Alarm.app` to start monitoring. A Terminal window will open showing logs.
+
+**Note:** The first time you run the app, it will automatically install dependencies if needed.
 
 **Option B: Command Line**
 

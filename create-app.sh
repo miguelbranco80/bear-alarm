@@ -49,8 +49,8 @@ APP_PATH="$(cd "$(dirname "$0")/../../.." && pwd)"
 # Open Terminal and run the monitor
 osascript <<APPLESCRIPT
 tell application "Terminal"
-    activate
     do script "cd '$APP_PATH' && ./run.sh; echo ''; echo 'Press any key to close...'; read -n 1; exit"
+    activate
 end tell
 APPLESCRIPT
 EOF
@@ -77,6 +77,10 @@ if [ -f "bear-icon.png" ]; then
     iconutil -c icns "$ICONSET" -o "$APP_DIR/Contents/Resources/AppIcon.icns"
     rm -rf "$ICONSET"
     
+    # Force macOS to recognize the new icon
+    touch "$APP_DIR"
+    touch "$APP_DIR/Contents/Info.plist"
+    
     echo "Bear icon applied 🐻"
 else
     # Create empty placeholder
@@ -96,5 +100,7 @@ echo "You can:"
 echo "- Move '$APP_NAME.app' to your Applications folder"
 echo "- Drag it to your Dock for quick access"
 echo "- Add it to Login Items to start automatically"
+echo ""
+echo "If the bear icon doesn't appear, run: killall Finder"
 echo ""
 

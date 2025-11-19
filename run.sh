@@ -17,5 +17,11 @@ if [ ! -f "config.yaml" ]; then
     exit 1
 fi
 
+# Check if dependencies are installed, if not, install them
+if [ ! -d ".venv" ]; then
+    echo "Installing dependencies (first time setup)..."
+    uv sync
+fi
+
 # Run the monitor
 uv run python -m src.main
