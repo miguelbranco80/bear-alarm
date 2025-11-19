@@ -41,6 +41,7 @@ config.yaml
 
 # macOS Application Bundle
 Bear Alarm.app/
+AppIcon.iconset/
 
 # OS
 .DS_Store

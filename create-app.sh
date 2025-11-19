@@ -43,25 +43,46 @@ EOF
 cat > "$APP_DIR/Contents/MacOS/bear-alarm" << 'EOF'
 #!/bin/bash
 
-# Get the project directory (parent of .app)
-PROJECT_DIR="$(dirname "$(dirname "$(dirname "$0")")")"
-cd "$PROJECT_DIR"
+# Get the directory where the .app is located (the project directory)
+APP_PATH="$(cd "$(dirname "$0")/../../.." && pwd)"
 
 # Open Terminal and run the monitor
 osascript <<APPLESCRIPT
 tell application "Terminal"
     activate
-    do script "cd '$PROJECT_DIR' && ./run.sh; echo ''; echo 'Press any key to close...'; read -n 1; exit"
+    do script "cd '$APP_PATH' && ./run.sh; echo ''; echo 'Press any key to close...'; read -n 1; exit"
 end tell
 APPLESCRIPT
 EOF
 
 chmod +x "$APP_DIR/Contents/MacOS/bear-alarm"
 
-# Create a simple icon (optional - you can replace this with a custom icon later)
-# For now, we'll create a placeholder
-cat > "$APP_DIR/Contents/Resources/AppIcon.icns" << 'EOF'
-EOF
+# Apply bear icon if bear-icon.png exists
+if [ -f "bear-icon.png" ]; then
+    echo "Applying bear icon..."
+    ICONSET="AppIcon.iconset"
+    mkdir -p "$ICONSET"
+    
+    sips -z 16 16 bear-icon.png --out "$ICONSET/icon_16x16.png" > /dev/null 2>&1
+    sips -z 32 32 bear-icon.png --out "$ICONSET/icon_16x16@2x.png" > /dev/null 2>&1
+    sips -z 32 32 bear-icon.png --out "$ICONSET/icon_32x32.png" > /dev/null 2>&1
+    sips -z 64 64 bear-icon.png --out "$ICONSET/icon_32x32@2x.png" > /dev/null 2>&1
+    sips -z 128 128 bear-icon.png --out "$ICONSET/icon_128x128.png" > /dev/null 2>&1
+    sips -z 256 256 bear-icon.png --out "$ICONSET/icon_128x128@2x.png" > /dev/null 2>&1
+    sips -z 256 256 bear-icon.png --out "$ICONSET/icon_256x256.png" > /dev/null 2>&1
+    sips -z 512 512 bear-icon.png --out "$ICONSET/icon_256x256@2x.png" > /dev/null 2>&1
+    sips -z 512 512 bear-icon.png --out "$ICONSET/icon_512x512.png" > /dev/null 2>&1
+    sips -z 1024 1024 bear-icon.png --out "$ICONSET/icon_512x512@2x.png" > /dev/null 2>&1
+    
+    iconutil -c icns "$ICONSET" -o "$APP_DIR/Contents/Resources/AppIcon.icns"
+    rm -rf "$ICONSET"
+    
+    echo "Bear icon applied 🐻"
+else
+    # Create empty placeholder
+    touch "$APP_DIR/Contents/Resources/AppIcon.icns"
+    echo "No bear-icon.png found, using default icon"
+fi
 
 echo ""
 echo "✅ Created $APP_NAME.app"
