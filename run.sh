@@ -23,5 +23,6 @@ if [ ! -d ".venv" ]; then
     uv sync
 fi
 
-# Run the monitor
-uv run python -m src.main
+# Run the monitor with caffeinate to prevent sleep
+echo "Starting monitoring (Mac will stay awake)..."
+caffeinate -i uv run python -m src.main

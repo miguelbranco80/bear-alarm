@@ -197,6 +197,7 @@ If audio doesn't work, you may need to:
    - If glucose ≥ high threshold: plays high alert sound
    - If glucose returns to normal: stops alerts
 5. **Repeat**: Continues playing alerts at configured intervals until glucose normalizes
+6. **Stay Awake**: Uses `caffeinate` to prevent Mac from sleeping during monitoring
 
 ### Alert Priority
 
@@ -260,6 +261,13 @@ The application validates alert sound files at startup and will not start if the
 - Ensure your Dexcom CGM is active and transmitting
 - Check that Share is enabled in the Dexcom mobile app
 - Verify someone is following the account (Share requires a follower)
+
+### Mac goes to sleep / monitoring stops
+
+The app uses `caffeinate` to prevent sleep automatically. If monitoring stops:
+- Make sure the Terminal window stays open
+- Check that the app is still running (look for the Terminal window)
+- The display can sleep (screen off) but the Mac stays awake
 
 ## macOS Application
 
