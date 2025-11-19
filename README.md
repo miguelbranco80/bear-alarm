@@ -71,7 +71,18 @@ docker-compose logs -f
 docker-compose down
 ```
 
-### 5. Run Locally (Alternative)
+### 5. Run Locally
+
+**Option A: macOS App (Easiest for non-technical users)**
+
+```bash
+# Create the macOS application
+./create-app.sh
+```
+
+Then double-click `Bear Alarm.app` to start monitoring. A Terminal window will open showing logs.
+
+**Option B: Command Line**
 
 ```bash
 # Install dependencies with uv
@@ -241,6 +252,35 @@ The application validates alert sound files at startup and will not start if the
 - Ensure your Dexcom CGM is active and transmitting
 - Check that Share is enabled in the Dexcom mobile app
 - Verify someone is following the account (Share requires a follower)
+
+## macOS Application
+
+### Creating a Double-Clickable App
+
+For non-technical users, you can create a macOS application bundle:
+
+```bash
+./create-app.sh
+```
+
+This creates `Bear Alarm.app` that can be:
+- **Double-clicked** to start monitoring
+- **Moved to Applications folder** for easy access
+- **Added to Dock** for quick launching
+- **Added to Login Items** to start automatically at login
+
+When you double-click the app:
+1. A Terminal window opens automatically
+2. Shows real-time logs
+3. Close the window (or press Ctrl+C) to stop monitoring
+
+### Adding to Login Items (Auto-start)
+
+1. Open **System Preferences** → **Users & Groups**
+2. Click **Login Items** tab
+3. Click **+** button
+4. Select `Bear Alarm.app`
+5. Check **Hide** if you want it to run in background
 
 ## Development
 

@@ -39,6 +39,9 @@ ENV/
 # Configuration files with credentials
 config.yaml
 
+# macOS Application Bundle
+Bear Alarm.app/
+
 # OS
 .DS_Store
 Thumbs.db
