@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  bear-alarm:
+    build: .
+    container_name: bear-alarm
+    restart: unless-stopped
+    
+    volumes:
+      # Mount configuration file (read-only)
+      - ./config.yaml:/app/config.yaml:ro
+      
+      # Mount alerts directory for custom sounds
+      - ./alerts:/app/alerts:ro
+    
+    # Audio device access (required for sound playback)
+    devices:
+      - /dev/snd:/dev/snd
+    
+    # Privileged mode may be needed for audio on some systems
+    # Uncomment if audio doesn't work
+    # privileged: true
+    
+    environment:
+      # Optional: Override config with environment variables
+      # - DEXCOM_USERNAME=your_username
+      # - DEXCOM_PASSWORD=your_password
+      # - DEXCOM_OUS=false
+      
+      # Ensure audio works in container
+      - AUDIODEV=default
+      - SDL_AUDIODRIVER=alsa
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+

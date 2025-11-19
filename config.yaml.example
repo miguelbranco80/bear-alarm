@@ -1,0 +1,42 @@
+# Bear Alarm - Dexcom Glucose Monitoring Configuration
+# Copy this file to config.yaml and fill in your details
+
+dexcom:
+  # Your Dexcom Share username (email)
+  username: "your_dexcom_share_username@example.com"
+  
+  # Your Dexcom Share password
+  password: "your_dexcom_share_password"
+  
+  # Set to true if you're outside the US (uses different Dexcom server)
+  ous: false
+
+alerts:
+  # Low glucose threshold in mmol/L
+  # Alert triggers when glucose is at or below this value
+  low_threshold: 3.0
+  
+  # High glucose threshold in mmol/L
+  # Alert triggers when glucose is at or above this value
+  high_threshold: 13.0
+  
+  # Path to audio file (WAV or MP3) for low glucose alerts
+  low_alert_sound: "alerts/alarm.wav"
+  
+  # Path to audio file (WAV or MP3) for high glucose alerts
+  # Can use a different sound file if desired
+  high_alert_sound: "alerts/alarm.wav"
+  
+  # Seconds between repeated alerts while glucose is out of range
+  # Default: 300 seconds (5 minutes)
+  alert_interval: 300
+
+monitoring:
+  # Seconds between glucose checks
+  # Default: 300 seconds (5 minutes) - matches Dexcom update frequency
+  poll_interval: 300
+  
+  # Seconds to wait before first check (allows system to initialize)
+  # Default: 10 seconds
+  startup_delay: 10
+
