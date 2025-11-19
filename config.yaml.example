@@ -36,7 +36,7 @@ monitoring:
   # Default: 300 seconds (5 minutes) - matches Dexcom update frequency
   poll_interval: 300
   
-  # Seconds to wait before first check (allows system to initialize)
-  # Default: 10 seconds
-  startup_delay: 10
+  # Minutes to wait before first check
+  # Default: 0 minutes (start immediately)
+  startup_delay_minutes: 0
 

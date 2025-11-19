@@ -3,6 +3,7 @@
 import logging
 import signal
 import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -100,6 +101,43 @@ def main() -> None:
             f"Alert sound files validated: "
             f"low={low_sound.name}, high={high_sound.name}"
         )
+
+        # Ask user for startup delay
+        default_delay_minutes = config.monitoring.startup_delay_minutes
+        print()
+        print("=" * 60)
+        delay_input = input(
+            f"Minutes to wait before starting monitoring? "
+            f"[default: {default_delay_minutes}]: "
+        ).strip()
+        
+        if delay_input == "":
+            delay_minutes = default_delay_minutes
+        else:
+            try:
+                delay_minutes = int(delay_input)
+                if delay_minutes < 0:
+                    logger.error("Delay cannot be negative, using 0")
+                    delay_minutes = 0
+            except ValueError:
+                logger.error(f"Invalid input '{delay_input}', using default {default_delay_minutes}")
+                delay_minutes = default_delay_minutes
+        
+        # Override config with user's choice
+        config.monitoring.startup_delay_minutes = delay_minutes
+        
+        # Show when monitoring will start
+        if delay_minutes > 0:
+            start_time = datetime.now() + timedelta(minutes=delay_minutes)
+            logger.info(
+                f"Monitoring will start in {delay_minutes} minute(s) "
+                f"at {start_time.strftime('%I:%M:%S %p')}"
+            )
+        else:
+            logger.info("Starting monitoring immediately")
+        
+        print("=" * 60)
+        print()
 
         # Create and start monitor
         _monitor = GlucoseMonitor(config)

@@ -121,7 +121,7 @@ uv run bear-alarm
 | `alerts.high_alert_sound` | Optional | Path to high alert WAV file | `alerts/alarm.wav` |
 | `alerts.alert_interval` | Optional | Seconds between repeated alerts | `300` |
 | `monitoring.poll_interval` | Optional | Seconds between glucose checks | `300` |
-| `monitoring.startup_delay` | Optional | Seconds before first check | `10` |
+| `monitoring.startup_delay_minutes` | Optional | Minutes before first check | `0` |
 
 ### Environment Variables
 
@@ -189,15 +189,16 @@ If audio doesn't work, you may need to:
 
 ## How It Works
 
-1. **Authentication**: Connects to Dexcom Share using your credentials
-2. **Polling**: Checks glucose levels every 5 minutes (configurable)
-3. **Threshold Check**: Compares reading against configured thresholds
-4. **Alert Trigger**: 
+1. **Startup**: Asks how many minutes to wait before starting (useful for meal timing)
+2. **Authentication**: Connects to Dexcom Share using your credentials
+3. **Polling**: Checks glucose levels every 5 minutes (configurable)
+4. **Threshold Check**: Compares reading against configured thresholds
+5. **Alert Trigger**: 
    - If glucose ≤ low threshold: plays low alert sound
    - If glucose ≥ high threshold: plays high alert sound
    - If glucose returns to normal: stops alerts
-5. **Repeat**: Continues playing alerts at configured intervals until glucose normalizes
-6. **Stay Awake**: Uses `caffeinate` to prevent Mac from sleeping during monitoring
+6. **Repeat**: Continues playing alerts at configured intervals until glucose normalizes
+7. **Stay Awake**: Uses `caffeinate` to prevent Mac from sleeping during monitoring
 
 ### Alert Priority
 

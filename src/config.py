@@ -55,9 +55,14 @@ class MonitoringConfig(BaseModel):
         description="Seconds between glucose checks (5 minutes matches Dexcom update frequency)",
         gt=0,
     )
-    startup_delay: int = Field(
-        default=10, description="Seconds to wait before first check", ge=0
+    startup_delay_minutes: int = Field(
+        default=0, description="Minutes to wait before first check", ge=0
     )
+    
+    @property
+    def startup_delay(self) -> int:
+        """Get startup delay in seconds (for internal use)."""
+        return self.startup_delay_minutes * 60
 
 
 class Config(BaseModel):
