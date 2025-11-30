@@ -9,6 +9,8 @@ from typing import Optional
 
 import pygame
 
+from .paths import resolve_sound_path
+
 logger = logging.getLogger(__name__)
 
 
@@ -42,8 +44,9 @@ class AlertSystem:
             high_alert_sound: Path to audio file (WAV or MP3) for high glucose alerts
             alert_interval: Seconds between repeated alerts
         """
-        self.low_alert_sound = Path(low_alert_sound)
-        self.high_alert_sound = Path(high_alert_sound)
+        # Resolve paths (handles both development and packaged modes)
+        self.low_alert_sound = resolve_sound_path(low_alert_sound)
+        self.high_alert_sound = resolve_sound_path(high_alert_sound)
         self.alert_interval = alert_interval
 
         self._current_state = AlertState.NORMAL

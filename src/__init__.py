@@ -1,4 +1,3 @@
-"""Bear Alarm - Dexcom Diabetes Monitoring System."""
+"""Bear Alarm - Dexcom glucose monitoring with audio alerts."""
 
-__version__ = "0.1.0"
-
+__version__ = "0.2.0"

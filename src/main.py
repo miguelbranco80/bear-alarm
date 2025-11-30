@@ -1,14 +1,7 @@
-"""Main entry point for Bear Alarm glucose monitoring service."""
+"""Main entry point for Bear Alarm - launches the GUI application."""
 
 import logging
-import signal
 import sys
-from datetime import datetime, timedelta
-from pathlib import Path
-from typing import Optional
-
-from .config import load_config_with_env_override
-from .monitor import GlucoseMonitor
 
 # Configure logging
 logging.basicConfig(
@@ -21,150 +14,31 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-# Global monitor instance for signal handling
-_monitor: Optional[GlucoseMonitor] = None
-
-
-def signal_handler(signum: int, frame) -> None:
-    """
-    Handle shutdown signals gracefully.
-
-    Args:
-        signum: Signal number
-        frame: Current stack frame
-    """
-    signal_name = signal.Signals(signum).name
-    logger.info(f"Received signal {signal_name}, shutting down...")
-
-    if _monitor:
-        _monitor.stop()
-
-    sys.exit(0)
-
 
 def main() -> None:
-    """Main entry point for the application."""
-    global _monitor
-
+    """Main entry point - launches the GUI application."""
     logger.info("=" * 60)
     logger.info("Bear Alarm - Dexcom Glucose Monitoring System")
     logger.info("=" * 60)
-
-    # Register signal handlers
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-
+    
     try:
-        # Load configuration
-        logger.info("Loading configuration...")
-        config_path = sys.argv[1] if len(sys.argv) > 1 else None
-        config = load_config_with_env_override(config_path)
-        logger.info("Configuration loaded successfully")
-
-        # Validate alert sound files exist
-        logger.info("Validating alert sound files...")
-        low_sound = Path(config.alerts.low_alert_sound)
-        high_sound = Path(config.alerts.high_alert_sound)
-
-        errors = []
+        from .ui import BearAlarmApp
         
-        # Check if files exist
-        if not low_sound.exists():
-            errors.append(f"Low alert sound file not found: {low_sound}")
-        elif not low_sound.is_file():
-            errors.append(f"Low alert sound path is not a file: {low_sound}")
-        elif low_sound.suffix.lower() not in ['.wav', '.mp3', '.mpeg']:
-            errors.append(
-                f"Low alert sound has unsupported format: {low_sound.suffix}. "
-                f"Use WAV or MP3"
-            )
-
-        if not high_sound.exists():
-            errors.append(f"High alert sound file not found: {high_sound}")
-        elif not high_sound.is_file():
-            errors.append(f"High alert sound path is not a file: {high_sound}")
-        elif high_sound.suffix.lower() not in ['.wav', '.mp3', '.mpeg']:
-            errors.append(
-                f"High alert sound has unsupported format: {high_sound.suffix}. "
-                f"Use WAV or MP3"
-            )
-
-        if errors:
-            for error in errors:
-                logger.error(error)
-            logger.error(
-                "Cannot start monitoring. Please fix the issues above."
-            )
-            sys.exit(1)
-
-        logger.info(
-            f"Alert sound files validated: "
-            f"low={low_sound.name}, high={high_sound.name}"
-        )
-
-        # Ask user for startup delay
-        default_delay_minutes = config.monitoring.startup_delay_minutes
-        print()
-        print("=" * 60)
-        delay_input = input(
-            f"Minutes to wait before starting monitoring? "
-            f"[default: {default_delay_minutes}]: "
-        ).strip()
+        app = BearAlarmApp()
+        app.run()
         
-        if delay_input == "":
-            delay_minutes = default_delay_minutes
-        else:
-            try:
-                delay_minutes = int(delay_input)
-                if delay_minutes < 0:
-                    logger.error("Delay cannot be negative, using 0")
-                    delay_minutes = 0
-            except ValueError:
-                logger.error(f"Invalid input '{delay_input}', using default {default_delay_minutes}")
-                delay_minutes = default_delay_minutes
-        
-        # Override config with user's choice
-        config.monitoring.startup_delay_minutes = delay_minutes
-        
-        # Show when monitoring will start
-        if delay_minutes > 0:
-            start_time = datetime.now() + timedelta(minutes=delay_minutes)
-            logger.info(
-                f"Monitoring will start in {delay_minutes} minute(s) "
-                f"at {start_time.strftime('%I:%M:%S %p')}"
-            )
-        else:
-            logger.info("Starting monitoring immediately")
-        
-        print("=" * 60)
-        print()
-
-        # Create and start monitor
-        _monitor = GlucoseMonitor(config)
-        _monitor.start()
-
-    except FileNotFoundError as e:
-        logger.error(f"Configuration error: {e}")
-        logger.error(
-            "Please create a config.yaml file based on config.yaml.example"
-        )
+    except ImportError as e:
+        logger.error(f"Failed to import UI components: {e}")
+        logger.error("Make sure Flet is installed: pip install flet")
         sys.exit(1)
-
-    except ValueError as e:
-        logger.error(f"Invalid configuration: {e}")
-        sys.exit(1)
-
-    except RuntimeError as e:
-        logger.error(f"Failed to start monitoring: {e}")
-        sys.exit(1)
-
+        
+    except KeyboardInterrupt:
+        logger.info("Shutting down...")
+        
     except Exception as e:
         logger.error(f"Unexpected error: {e}", exc_info=True)
-        if _monitor:
-            _monitor.stop()
         sys.exit(1)
 
 
 if __name__ == "__main__":
     main()
-
