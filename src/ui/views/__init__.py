@@ -3,6 +3,8 @@
 from .dashboard import DashboardView
 from .history import HistoryView
 from .settings import SettingsView
+from .rules import RulesView
+from .contacts import ContactsView
 
-__all__ = ["DashboardView", "HistoryView", "SettingsView"]
+__all__ = ["DashboardView", "HistoryView", "SettingsView", "RulesView", "ContactsView"]
 

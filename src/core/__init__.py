@@ -1,8 +1,12 @@
 """Core business logic for Bear Alarm."""
 
 from .alerts import AlertSystem, AlertState
-from .config import Config, load_config, save_config
+from .config import (
+    Config, load_config, save_config,
+    ScheduleConfig, EmergencyContactConfig, ThresholdsConfig,
+)
 from .dexcom_client import DexcomClient, DexcomClientError
+from .emergency import call_facetime, send_imessage, open_messages_app
 from .monitor import GlucoseMonitor
 from .paths import (
     get_user_data_dir,
@@ -19,6 +23,9 @@ __all__ = [
     "Config",
     "load_config",
     "save_config",
+    "ScheduleConfig",
+    "EmergencyContactConfig",
+    "ThresholdsConfig",
     "DexcomClient",
     "DexcomClientError",
     "GlucoseMonitor",
@@ -31,5 +38,8 @@ __all__ = [
     "allow_sleep",
     "check_volume_status",
     "get_system_volume",
+    "call_facetime",
+    "send_imessage",
+    "open_messages_app",
 ]
 

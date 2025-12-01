@@ -2,6 +2,7 @@
 
 import logging
 import os
+from datetime import time
 from pathlib import Path
 from typing import Optional
 
@@ -29,15 +30,137 @@ class DexcomConfig(BaseModel):
         return bool(self.username and self.password)
 
 
-class AlertsConfig(BaseModel):
-    """Alert configuration."""
-
+class ThresholdsConfig(BaseModel):
+    """Threshold and persistence settings (used by default and schedules)."""
+    
     low_threshold: float = Field(
         default=3.9, description="Low glucose threshold in mmol/L", gt=0
     )
     high_threshold: float = Field(
         default=15.0, description="High glucose threshold in mmol/L", gt=0
     )
+    low_persist_minutes: int = Field(
+        default=0, description="Minutes low must persist before alerting", ge=0
+    )
+    high_persist_minutes: int = Field(
+        default=0, description="Minutes high must persist before alerting", ge=0
+    )
+    
+    @field_validator("high_threshold")
+    @classmethod
+    def validate_thresholds(cls, v: float, info) -> float:
+        """Ensure high threshold is greater than low threshold."""
+        if "low_threshold" in info.data and v <= info.data["low_threshold"]:
+            raise ValueError("high_threshold must be greater than low_threshold")
+        return v
+
+
+class ScheduleConfig(BaseModel):
+    """A named schedule that overrides default thresholds during specific times."""
+    
+    name: str = Field(description="Schedule name (e.g., 'Work', 'Sleep')")
+    enabled: bool = Field(default=True, description="Whether this schedule is active")
+    priority: int = Field(default=1, description="Higher priority wins when schedules overlap", ge=1)
+    
+    # Time range
+    start_time: str = Field(default="09:00", description="Start time (HH:MM)")
+    end_time: str = Field(default="17:00", description="End time (HH:MM)")
+    
+    # Days of week (0=Monday, 6=Sunday)
+    days: list[int] = Field(
+        default=[0, 1, 2, 3, 4],  # Mon-Fri
+        description="Days of week (0=Mon, 6=Sun)"
+    )
+    
+    # Override thresholds (None = use default)
+    low_threshold: Optional[float] = Field(default=None, description="Override low threshold")
+    high_threshold: Optional[float] = Field(default=None, description="Override high threshold")
+    low_persist_minutes: Optional[int] = Field(default=None, description="Override low persistence")
+    high_persist_minutes: Optional[int] = Field(default=None, description="Override high persistence")
+    
+    def get_start_time(self) -> time:
+        """Parse start time string to time object."""
+        parts = self.start_time.split(":")
+        return time(int(parts[0]), int(parts[1]))
+    
+    def get_end_time(self) -> time:
+        """Parse end time string to time object."""
+        parts = self.end_time.split(":")
+        return time(int(parts[0]), int(parts[1]))
+    
+    def is_active_now(self) -> bool:
+        """Check if this schedule is currently active."""
+        if not self.enabled:
+            return False
+        
+        from datetime import datetime
+        now = datetime.now()
+        
+        # Check day of week
+        if now.weekday() not in self.days:
+            return False
+        
+        # Check time range
+        current_time = now.time()
+        start = self.get_start_time()
+        end = self.get_end_time()
+        
+        # Handle overnight schedules (e.g., 23:00 - 07:00)
+        if start <= end:
+            return start <= current_time <= end
+        else:
+            return current_time >= start or current_time <= end
+
+
+class EmergencyContactConfig(BaseModel):
+    """Emergency contact for auto-message on alerts."""
+    
+    name: str = Field(default="", description="Contact name")
+    phone: str = Field(default="", description="Phone number (for FaceTime/iMessage)")
+    enabled: bool = Field(default=True, description="Whether this contact is active")
+    
+    # Auto-message on LOW alert
+    message_on_low: bool = Field(default=False, description="Send message when low alert triggers")
+    message_on_low_snooze: int = Field(default=30, description="Minutes before re-sending low message", ge=5)
+    low_message_text: str = Field(
+        default="⚠️ LOW glucose alert! Please check on me.",
+        description="Message for low alerts"
+    )
+    
+    # Auto-message on HIGH alert  
+    message_on_high: bool = Field(default=False, description="Send message when high alert triggers")
+    message_on_high_snooze: int = Field(default=60, description="Minutes before re-sending high message", ge=5)
+    high_message_text: str = Field(
+        default="⚠️ HIGH glucose alert - prolonged high blood sugar.",
+        description="Message for high alerts"
+    )
+
+
+class AlertsConfig(BaseModel):
+    """Alert configuration."""
+
+    # Urgent thresholds - ALWAYS alert immediately, bypass persistence
+    urgent_low: float = Field(
+        default=2.8, description="Urgent low - always alert immediately", gt=0
+    )
+    
+    # Default thresholds (when no schedule is active)
+    low_threshold: float = Field(
+        default=3.9, description="Low glucose threshold in mmol/L", gt=0
+    )
+    high_threshold: float = Field(
+        default=15.0, description="High glucose threshold in mmol/L", gt=0
+    )
+    
+    # Persistence - how long condition must last before alerting
+    low_persist_minutes: int = Field(
+        default=0, description="Minutes low must persist before alerting", ge=0
+    )
+    high_persist_minutes: int = Field(
+        default=0, description="Minutes high must persist before alerting", ge=0
+    )
+    
+    # Sound settings
     low_alert_sound: str = Field(
         default="sounds/siren.mp3", description="Path to low alert sound file"
     )
@@ -49,6 +172,16 @@ class AlertsConfig(BaseModel):
     )
     min_volume: int = Field(
         default=50, description="Minimum system volume before warning (10-100)", ge=10, le=100
+    )
+    
+    # Schedules
+    schedules: list[ScheduleConfig] = Field(
+        default_factory=list, description="Time-based schedule overrides"
+    )
+    
+    # Emergency contacts
+    emergency_contacts: list[EmergencyContactConfig] = Field(
+        default_factory=list, description="Emergency contacts for critical alerts"
     )
 
     @field_validator("high_threshold")
@@ -66,6 +199,34 @@ class AlertsConfig(BaseModel):
     def get_high_sound_path(self) -> Path:
         """Get resolved path to high alert sound."""
         return resolve_sound_path(self.high_alert_sound)
+    
+    def get_active_schedule(self) -> Optional[ScheduleConfig]:
+        """Get the highest-priority currently active schedule, or None."""
+        active = [s for s in self.schedules if s.is_active_now()]
+        if not active:
+            return None
+        # Return highest priority
+        return max(active, key=lambda s: s.priority)
+    
+    def get_effective_thresholds(self) -> ThresholdsConfig:
+        """Get the currently effective thresholds (considering active schedule)."""
+        schedule = self.get_active_schedule()
+        
+        if schedule is None:
+            return ThresholdsConfig(
+                low_threshold=self.low_threshold,
+                high_threshold=self.high_threshold,
+                low_persist_minutes=self.low_persist_minutes,
+                high_persist_minutes=self.high_persist_minutes,
+            )
+        
+        # Schedule overrides (use default if not specified)
+        return ThresholdsConfig(
+            low_threshold=schedule.low_threshold if schedule.low_threshold is not None else self.low_threshold,
+            high_threshold=schedule.high_threshold if schedule.high_threshold is not None else self.high_threshold,
+            low_persist_minutes=schedule.low_persist_minutes if schedule.low_persist_minutes is not None else self.low_persist_minutes,
+            high_persist_minutes=schedule.high_persist_minutes if schedule.high_persist_minutes is not None else self.high_persist_minutes,
+        )
 
 
 class MonitoringConfig(BaseModel):
@@ -161,12 +322,44 @@ def save_config(config: Config) -> None:
             "ous": config.dexcom.ous,
         },
         "alerts": {
+            "urgent_low": config.alerts.urgent_low,
             "low_threshold": config.alerts.low_threshold,
             "high_threshold": config.alerts.high_threshold,
+            "low_persist_minutes": config.alerts.low_persist_minutes,
+            "high_persist_minutes": config.alerts.high_persist_minutes,
             "low_alert_sound": config.alerts.low_alert_sound,
             "high_alert_sound": config.alerts.high_alert_sound,
             "alert_interval": config.alerts.alert_interval,
             "min_volume": config.alerts.min_volume,
+            "schedules": [
+                {
+                    "name": s.name,
+                    "enabled": s.enabled,
+                    "priority": s.priority,
+                    "start_time": s.start_time,
+                    "end_time": s.end_time,
+                    "days": s.days,
+                    "low_threshold": s.low_threshold,
+                    "high_threshold": s.high_threshold,
+                    "low_persist_minutes": s.low_persist_minutes,
+                    "high_persist_minutes": s.high_persist_minutes,
+                }
+                for s in config.alerts.schedules
+            ],
+            "emergency_contacts": [
+                {
+                    "name": c.name,
+                    "phone": c.phone,
+                    "enabled": c.enabled,
+                    "message_on_low": c.message_on_low,
+                    "message_on_low_snooze": c.message_on_low_snooze,
+                    "low_message_text": c.low_message_text,
+                    "message_on_high": c.message_on_high,
+                    "message_on_high_snooze": c.message_on_high_snooze,
+                    "high_message_text": c.high_message_text,
+                }
+                for c in config.alerts.emergency_contacts
+            ],
         },
         "monitoring": {
             "poll_interval": config.monitoring.poll_interval,

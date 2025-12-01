@@ -9,11 +9,15 @@ from typing import Optional
 
 import flet as ft
 
-from ..core import Config, load_config, save_config, DexcomClient, DexcomClientError, AlertSystem, prevent_sleep, allow_sleep, check_volume_status
+from ..core import (
+    Config, load_config, save_config, DexcomClient, DexcomClientError, 
+    AlertSystem, prevent_sleep, allow_sleep, check_volume_status,
+    call_facetime, send_imessage,
+)
 from ..data import Database
 from ..data.models import TrendDirection
 from .theme import COLORS, SIZES, SPACING
-from .views import DashboardView, HistoryView, SettingsView
+from .views import DashboardView, HistoryView, SettingsView, RulesView, ContactsView
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +36,8 @@ class BearAlarmApp:
         self._dashboard: Optional[DashboardView] = None
         self._history: Optional[HistoryView] = None
         self._settings: Optional[SettingsView] = None
+        self._rules: Optional[RulesView] = None
+        self._contacts: Optional[ContactsView] = None
         self._tabs: Optional[ft.Tabs] = None
         self._volume_warning: Optional[ft.Container] = None
         
@@ -45,6 +51,12 @@ class BearAlarmApp:
         # Current glucose state
         self._current_glucose: Optional[float] = None
         self._current_trend: str = "→"
+        
+        # Persistence tracking (when did condition start?)
+        self._low_started: Optional[datetime] = None
+        self._high_started: Optional[datetime] = None
+        self._emergency_triggered: set = set()  # Track which contacts were already triggered
+        self._message_snooze_until: dict = {}  # {contact_phone_type: datetime} for message snooze
         
 
     def run(self) -> None:
@@ -60,9 +72,9 @@ class BearAlarmApp:
         
         # Window configuration
         page.title = "Bear Alarm"
-        page.window.width = 420
-        page.window.height = 700
-        page.window.min_width = 380
+        page.window.width = 500
+        page.window.height = 720
+        page.window.min_width = 460
         page.window.min_height = 600
         
         # Minimize to dock instead of closing (keeps monitoring running)
@@ -155,11 +167,27 @@ class BearAlarmApp:
         self._dashboard = DashboardView(
             on_snooze=self._handle_snooze,
             on_cancel_snooze=self._handle_cancel_snooze,
+            on_call=self._handle_facetime_call,
+            get_contacts=lambda: self.config.alerts.emergency_contacts if self.config else [],
         )
         
         self._history = HistoryView(
             get_readings=lambda hours: self.db.get_readings_for_chart(hours) if self.db else [],
             get_stats=lambda hours: self.db.get_stats(hours) if self.db else {},
+        )
+        
+        self._rules = RulesView(
+            config=self.config,
+            on_save=self._handle_rules_save,
+            page=self.page,
+        )
+        
+        self._contacts = ContactsView(
+            config=self.config,
+            on_save=self._handle_rules_save,
+            on_call=self._handle_facetime_call,
+            on_message=self._handle_send_message,
+            page=self.page,
         )
         
         self._settings = SettingsView(
@@ -194,6 +222,16 @@ class BearAlarmApp:
                     text="History",
                     icon=ft.Icons.SHOW_CHART,
                     content=self._history.build(),
+                ),
+                ft.Tab(
+                    text="Rules",
+                    icon=ft.Icons.TUNE,
+                    content=self._rules.build(),
+                ),
+                ft.Tab(
+                    text="Contacts",
+                    icon=ft.Icons.CONTACT_PHONE,
+                    content=self._contacts.build(),
                 ),
                 ft.Tab(
                     text="Settings",
@@ -433,30 +471,120 @@ class BearAlarmApp:
             ))
 
     def _check_thresholds(self, glucose_mmol: float) -> None:
-        """Check glucose against thresholds and trigger alerts."""
+        """Check glucose against thresholds and trigger alerts with persistence."""
         if not self.config or not self.alert_system:
             return
         
+        now = datetime.now()
+        
         # Check if snoozed
         if self._is_snoozed and self._snooze_until:
-            if datetime.now() >= self._snooze_until:
+            if now >= self._snooze_until:
                 self._is_snoozed = False
                 self._snooze_until = None
                 self._update_ui(lambda: self._dashboard.update_snooze_state(None))
             else:
                 return  # Still snoozed, don't alert
         
-        low = self.config.alerts.low_threshold
-        high = self.config.alerts.high_threshold
+        # Get effective thresholds (considers active schedule)
+        thresholds = self.config.alerts.get_effective_thresholds()
+        urgent_low = self.config.alerts.urgent_low
         
-        if glucose_mmol <= low:
-            logger.warning(f"LOW GLUCOSE: {glucose_mmol:.1f}")
+        
+        # URGENT LOW - always alert immediately, bypass everything
+        if glucose_mmol <= urgent_low:
+            logger.warning(f"URGENT LOW GLUCOSE: {glucose_mmol:.1f}")
             self.alert_system.trigger_low_alert()
-        elif glucose_mmol >= high:
-            logger.warning(f"HIGH GLUCOSE: {glucose_mmol:.1f}")
-            self.alert_system.trigger_high_alert()
+            self._send_alert_messages("low")
+            self._low_started = self._low_started or now
+            self._high_started = None
+            return
+        
+        # LOW - check persistence
+        if glucose_mmol <= thresholds.low_threshold:
+            if self._low_started is None:
+                self._low_started = now
+                logger.info(f"Low glucose started: {glucose_mmol:.1f}")
+            
+            persist_minutes = thresholds.low_persist_minutes
+            elapsed = (now - self._low_started).total_seconds() / 60
+            
+            if elapsed >= persist_minutes:
+                logger.warning(f"LOW GLUCOSE (persisted {elapsed:.0f}m): {glucose_mmol:.1f}")
+                self.alert_system.trigger_low_alert()
+                self._send_alert_messages("low")
+            else:
+                logger.debug(f"Low glucose, waiting for persistence ({elapsed:.0f}/{persist_minutes}m)")
+            
+            self._high_started = None
+            
+        # HIGH - check persistence
+        elif glucose_mmol >= thresholds.high_threshold:
+            if self._high_started is None:
+                self._high_started = now
+                logger.info(f"High glucose started: {glucose_mmol:.1f}")
+            
+            persist_minutes = thresholds.high_persist_minutes
+            elapsed = (now - self._high_started).total_seconds() / 60
+            
+            if elapsed >= persist_minutes:
+                logger.warning(f"HIGH GLUCOSE (persisted {elapsed:.0f}m): {glucose_mmol:.1f}")
+                self.alert_system.trigger_high_alert()
+                self._send_alert_messages("high")
+            else:
+                logger.debug(f"High glucose, waiting for persistence ({elapsed:.0f}/{persist_minutes}m)")
+            
+            self._low_started = None
+            
+        # NORMAL - clear alerts and reset tracking
         else:
             self.alert_system.clear_alert()
+            self._low_started = None
+            self._high_started = None
+            self._emergency_triggered.clear()
+            # Note: message snoozes persist even after normalizing
+
+    def _send_alert_messages(self, alert_type: str) -> None:
+        """Send messages to contacts when an alert triggers (with snooze)."""
+        if not self.config:
+            return
+        
+        now = datetime.now()
+        
+        for contact in self.config.alerts.emergency_contacts:
+            if not contact.enabled:
+                continue
+            
+            # Determine if we should message for this alert type
+            should_message = False
+            snooze_minutes = 30
+            message_text = ""
+            snooze_key = f"{contact.phone}_{alert_type}"
+            
+            if alert_type == "low" and contact.message_on_low:
+                should_message = True
+                snooze_minutes = contact.message_on_low_snooze
+                message_text = contact.low_message_text
+            elif alert_type == "high" and contact.message_on_high:
+                should_message = True
+                snooze_minutes = contact.message_on_high_snooze
+                message_text = contact.high_message_text
+            
+            if not should_message:
+                continue
+            
+            # Check snooze
+            snooze_until = self._message_snooze_until.get(snooze_key)
+            if snooze_until and now < snooze_until:
+                logger.debug(f"Message to {contact.name} snoozed until {snooze_until}")
+                continue
+            
+            # Send message
+            logger.warning(f"Sending {alert_type} alert message to {contact.name}")
+            if send_imessage(contact.phone, message_text):
+                # Set snooze
+                self._message_snooze_until[snooze_key] = now + timedelta(minutes=snooze_minutes)
+                logger.info(f"Message snooze set for {contact.name} until {self._message_snooze_until[snooze_key]}")
 
     def _update_ui(self, callback) -> None:
         """Safely update UI from background thread."""
@@ -603,11 +731,66 @@ class BearAlarmApp:
             logger.debug(f"Testing sound: {resolved_path}")
             self.alert_system._play_sound(resolved_path)
 
+    def _handle_rules_save(self, config: Config) -> None:
+        """Handle rules/contacts save."""
+        try:
+            save_config(config)
+            self.config = config
+            
+            # Update views with new config
+            if self._rules:
+                self._rules.update_config(config)
+            if self._contacts:
+                self._contacts.update_config(config)
+            
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text("Saved!", color=COLORS["text_primary"]),
+                bgcolor=COLORS["success"],
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+            
+        except Exception as e:
+            logger.error(f"Failed to save: {e}")
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(f"Error: {e}", color=COLORS["text_primary"]),
+                bgcolor=COLORS["error"],
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+
+    def _handle_facetime_call(self, phone: str) -> None:
+        """Handle manual FaceTime call."""
+        success = call_facetime(phone)
+        if success:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text("FaceTime call initiated"),
+                bgcolor=COLORS["success"],
+            )
+        else:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text("Failed to start FaceTime"),
+                bgcolor=COLORS["error"],
+            )
+        self.page.snack_bar.open = True
+        self.page.update()
+
+    def _handle_send_message(self, phone: str, message: str) -> None:
+        """Handle send message request."""
+        success = send_imessage(phone, message)
+        if not success:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text("Failed to send message"),
+                bgcolor=COLORS["error"],
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+
     def _show_setup_dialog(self) -> None:
         """Show initial setup dialog."""
         def go_to_settings(_):
             dialog.open = False
-            self._switch_to_tab(2)  # Settings tab
+            self._switch_to_tab(4)  # Settings tab (now index 4)
             self.page.update()
         
         dialog = ft.AlertDialog(

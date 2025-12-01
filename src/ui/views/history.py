@@ -22,6 +22,7 @@ class HistoryView:
         self._selected_range = 24  # hours
         self._chart_container: Optional[ft.Container] = None
         self._stats_container: Optional[ft.Container] = None
+        self._range_buttons: dict[int, ft.Container] = {}
         self._control: Optional[ft.Control] = None
 
     def build(self) -> ft.Control:
@@ -91,24 +92,39 @@ class HistoryView:
         selected: bool = False,
     ) -> ft.Container:
         """Create a time range selection button."""
-        return ft.Container(
-            content=ft.Text(
-                label,
-                size=SIZES["caption"],
-                weight=ft.FontWeight.W_600 if selected else ft.FontWeight.W_400,
-                color=COLORS["primary"] if selected else COLORS["text_muted"],
-                text_align=ft.TextAlign.CENTER,
-            ),
+        text = ft.Text(
+            label,
+            size=SIZES["caption"],
+            weight=ft.FontWeight.W_600 if selected else ft.FontWeight.W_400,
+            color=COLORS["primary"] if selected else COLORS["text_muted"],
+            text_align=ft.TextAlign.CENTER,
+        )
+        
+        container = ft.Container(
+            content=text,
             padding=ft.padding.symmetric(horizontal=12, vertical=6),
             bgcolor=ft.Colors.with_opacity(0.1, COLORS["primary"]) if selected else None,
             border_radius=8,
             on_click=lambda _: self._select_range(hours),
             ink=True,
+            data={"text": text, "hours": hours, "label": label},  # Store references
         )
+        
+        self._range_buttons[hours] = container
+        return container
 
     def _select_range(self, hours: int) -> None:
         """Handle range selection."""
         self._selected_range = hours
+        
+        # Update button styles
+        for btn_hours, btn in self._range_buttons.items():
+            is_selected = btn_hours == hours
+            text = btn.data["text"]
+            text.weight = ft.FontWeight.W_600 if is_selected else ft.FontWeight.W_400
+            text.color = COLORS["primary"] if is_selected else COLORS["text_muted"]
+            btn.bgcolor = ft.Colors.with_opacity(0.1, COLORS["primary"]) if is_selected else None
+        
         self.refresh_data()
 
     def _create_chart(

@@ -1,11 +1,14 @@
 """Dashboard view - main glucose display with snooze functionality."""
 
 from datetime import datetime
-from typing import Callable, Optional
+from typing import Callable, Optional, List, TYPE_CHECKING
 
 import flet as ft
 
 from ..theme import COLORS, SIZES, SPACING, card, get_glucose_color
+
+if TYPE_CHECKING:
+    from ...core import EmergencyContactConfig
 
 
 class DashboardView:
@@ -15,9 +18,13 @@ class DashboardView:
         self,
         on_snooze: Callable[[int], None],
         on_cancel_snooze: Callable[[], None],
+        on_call: Optional[Callable[[str], None]] = None,
+        get_contacts: Optional[Callable[[], List["EmergencyContactConfig"]]] = None,
     ):
         self.on_snooze = on_snooze
         self.on_cancel_snooze = on_cancel_snooze
+        self.on_call = on_call
+        self.get_contacts = get_contacts
         
         # State
         self._glucose_value: Optional[float] = None
@@ -34,6 +41,7 @@ class DashboardView:
         self._snooze_container: Optional[ft.Container] = None
         self._snooze_info: Optional[ft.Container] = None
         self._snooze_until_text: Optional[ft.Text] = None
+        self._contacts_row: Optional[ft.Row] = None
         self._control: Optional[ft.Control] = None
 
     def build(self) -> ft.Control:
@@ -167,6 +175,33 @@ class DashboardView:
             alignment=ft.MainAxisAlignment.SPACE_EVENLY,
         )
         
+        # Emergency contacts row
+        self._contacts_row = ft.Row(
+            [],
+            alignment=ft.MainAxisAlignment.CENTER,
+            spacing=SPACING["sm"],
+            wrap=True,
+        )
+        self._refresh_contacts()
+        
+        contacts_section = ft.Container(
+            content=ft.Column(
+                [
+                    ft.Text(
+                        "EMERGENCY CONTACTS",
+                        size=SIZES["caption"],
+                        weight=ft.FontWeight.W_600,
+                        color=COLORS["text_muted"],
+                        text_align=ft.TextAlign.CENTER,
+                    ),
+                    self._contacts_row,
+                ],
+                spacing=SPACING["xs"],
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            visible=len(self._contacts_row.controls) > 0,
+        )
+        
         # Main layout
         self._control = ft.Container(
             content=ft.Column(
@@ -184,6 +219,7 @@ class DashboardView:
                     ),
                     self._snooze_info,
                     self._snooze_container,
+                    contacts_section,
                     ft.Container(height=SPACING["md"]),
                     stats_row,
                 ],
@@ -300,3 +336,50 @@ class DashboardView:
     def set_alerting(self, is_alerting: bool, alert_type: str = "") -> None:
         """Update alerting state for visual feedback."""
         self._is_alerting = is_alerting
+
+    def _refresh_contacts(self) -> None:
+        """Refresh the emergency contacts display."""
+        if not self._contacts_row:
+            return
+        
+        self._contacts_row.controls.clear()
+        
+        if not self.get_contacts:
+            return
+        
+        contacts = self.get_contacts()
+        for contact in contacts:
+            if contact.enabled:
+                self._contacts_row.controls.append(
+                    self._create_contact_button(contact)
+                )
+
+    def _create_contact_button(self, contact: "EmergencyContactConfig") -> ft.Container:
+        """Create a contact quick-call button."""
+        return ft.Container(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.VIDEO_CALL, color=COLORS["success"], size=16),
+                    ft.Text(
+                        contact.name,
+                        size=SIZES["caption"],
+                        color=COLORS["text_primary"],
+                    ),
+                ],
+                spacing=4,
+            ),
+            bgcolor=COLORS["surface"],
+            padding=ft.padding.symmetric(horizontal=12, vertical=8),
+            border_radius=20,
+            on_click=lambda _, c=contact: self._handle_call(c.phone) if self.on_call else None,
+            ink=True,
+        )
+
+    def _handle_call(self, phone: str) -> None:
+        """Handle contact call button click."""
+        if self.on_call:
+            self.on_call(phone)
+
+    def refresh_contacts(self) -> None:
+        """Public method to refresh contacts from outside."""
+        self._refresh_contacts()
