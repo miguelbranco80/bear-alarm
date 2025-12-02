@@ -34,7 +34,7 @@ class GlucoseMonitor:
         self.dexcom_client = DexcomClient(
             username=config.dexcom.username,
             password=config.dexcom.password,
-            ous=config.dexcom.ous,
+            region=config.dexcom.region,
         )
 
         # Initialize alert system

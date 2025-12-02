@@ -19,9 +19,9 @@ class DexcomConfig(BaseModel):
 
     username: str = Field(default="", description="Dexcom Share username")
     password: str = Field(default="", description="Dexcom Share password")
-    ous: bool = Field(
-        default=False,
-        description="Set to True if outside US (uses different Dexcom server)",
+    region: str = Field(
+        default="us",
+        description="Dexcom region: 'us', 'ous' (outside US), or 'jp' (Japan)",
     )
     
     @property
@@ -296,8 +296,8 @@ def load_config() -> Config:
         config_data.setdefault("dexcom", {})["username"] = os.getenv("DEXCOM_USERNAME")
     if os.getenv("DEXCOM_PASSWORD"):
         config_data.setdefault("dexcom", {})["password"] = os.getenv("DEXCOM_PASSWORD")
-    if os.getenv("DEXCOM_OUS"):
-        config_data.setdefault("dexcom", {})["ous"] = os.getenv("DEXCOM_OUS", "").lower() == "true"
+    if os.getenv("DEXCOM_REGION"):
+        config_data.setdefault("dexcom", {})["region"] = os.getenv("DEXCOM_REGION", "us")
     
     return Config(**config_data)
 
@@ -319,7 +319,7 @@ def save_config(config: Config) -> None:
         "dexcom": {
             "username": config.dexcom.username,
             "password": config.dexcom.password,
-            "ous": config.dexcom.ous,
+            "region": config.dexcom.region,
         },
         "alerts": {
             "urgent_low": config.alerts.urgent_low,

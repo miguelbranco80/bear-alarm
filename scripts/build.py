@@ -1,19 +1,16 @@
 #!/usr/bin/env python3
 """
-Cross-platform build script for Bear Alarm.
+macOS build script for Bear Alarm.
 
-This script packages Bear Alarm as a standalone application using Flet's
-built-in packaging (which uses PyInstaller under the hood).
+Packages Bear Alarm as a standalone .app using PyInstaller.
 
 Usage:
-    python scripts/build.py [--platform macos|windows|linux]
+    python scripts/build.py
     
 The packaged app will be in the dist/ directory.
 """
 
-import argparse
 import os
-import platform
 import shutil
 import subprocess
 import sys
@@ -29,17 +26,6 @@ APP_VERSION = "0.2.0"
 BUNDLE_ID = "com.bearalarm.app"
 
 
-def get_platform() -> str:
-    """Get current platform name."""
-    system = platform.system()
-    if system == "Darwin":
-        return "macos"
-    elif system == "Windows":
-        return "windows"
-    else:
-        return "linux"
-
-
 def check_dependencies():
     """Verify required tools are installed."""
     print("📋 Checking dependencies...")
@@ -50,12 +36,20 @@ def check_dependencies():
         sys.exit(1)
     print(f"  ✓ Python {sys.version_info.major}.{sys.version_info.minor}")
     
-    # Check flet is installed
+    # Check PyInstaller
     try:
-        import flet
-        print(f"  ✓ Flet {flet.version.version}")
+        import PyInstaller
+        print(f"  ✓ PyInstaller {PyInstaller.__version__}")
     except ImportError:
-        print("❌ Flet not installed. Run: pip install flet")
+        print("  Installing PyInstaller...")
+        subprocess.run([sys.executable, "-m", "pip", "install", "pyinstaller"], check=True)
+    
+    # Check PySide6
+    try:
+        import PySide6
+        print(f"  ✓ PySide6 {PySide6.__version__}")
+    except ImportError:
+        print("❌ PySide6 not installed")
         sys.exit(1)
 
 
@@ -63,67 +57,72 @@ def clean_build():
     """Clean previous build artifacts."""
     print("🧹 Cleaning previous builds...")
     
-    dirs_to_clean = ["dist", "build", "__pycache__"]
+    dirs_to_clean = ["dist", "build"]
     for dir_name in dirs_to_clean:
         path = ROOT / dir_name
         if path.exists():
             shutil.rmtree(path)
             print(f"  ✓ Removed {dir_name}/")
+    
+    # Clean spec file
+    spec_file = ROOT / f"{APP_NAME}.spec"
+    if spec_file.exists():
+        spec_file.unlink()
+        print(f"  ✓ Removed {spec_file.name}")
 
 
-def copy_resources():
-    """Copy resource files to build location."""
-    print("📦 Preparing resources...")
+def build_macos():
+    """Build macOS .app bundle."""
+    print("🔨 Building macOS app...")
     
-    # Ensure resources directory exists and has files
-    sounds_dir = ROOT / "resources" / "sounds"
-    if not sounds_dir.exists():
-        print("⚠️  No resources/sounds/ directory found")
-    else:
-        print(f"  ✓ Alert sounds: {list(sounds_dir.glob('*'))}")
+    # Paths
+    main_script = ROOT / "src" / "main_qt.py"
+    resources_dir = ROOT / "resources"
+    icon_path = resources_dir / "icons" / "AppIcon.icns"
     
-    # Copy icon
-    icon_src = ROOT / "resources" / "icons" / "bear-icon.png"
-    if icon_src.exists():
-        print(f"  ✓ Icon: {icon_src}")
-
-
-def build_flet(target_platform: str):
-    """Build using Flet's packaging."""
-    print(f"🔨 Building for {target_platform}...")
+    if not icon_path.exists():
+        icon_path = resources_dir / "icons" / "bear-icon.png"
     
-    # Determine icon file based on platform
-    if target_platform == "macos":
-        icon = ROOT / "resources" / "icons" / "AppIcon.icns"
-        if not icon.exists():
-            icon = ROOT / "resources" / "icons" / "bear-icon.png"
-    elif target_platform == "windows":
-        icon = ROOT / "resources" / "icons" / "bear-icon.ico"
-        if not icon.exists():
-            icon = ROOT / "resources" / "icons" / "bear-icon.png"
-    else:
-        icon = ROOT / "resources" / "icons" / "bear-icon.png"
-    
-    # Build command
+    # PyInstaller command
     cmd = [
-        sys.executable, "-m", "flet", "pack",
-        str(ROOT / "src" / "main.py"),
+        sys.executable, "-m", "PyInstaller",
         "--name", APP_NAME,
-        "--product-name", APP_NAME,
-        "--product-version", APP_VERSION,
-        "--bundle-id", BUNDLE_ID,
+        "--windowed",  # No console window
+        "--onedir",    # Directory bundle (faster startup than onefile)
+        "--noconfirm", # Overwrite without asking
+        
+        # macOS specific
+        "--osx-bundle-identifier", BUNDLE_ID,
     ]
     
-    if icon.exists():
-        cmd.extend(["--icon", str(icon)])
+    # Add icon if exists
+    if icon_path.exists():
+        cmd.extend(["--icon", str(icon_path)])
     
-    # Add resources (sounds, icons, defaults)
-    resources_dir = ROOT / "resources"
+    # Add resources
     if resources_dir.exists():
-        cmd.extend(["--add-data", f"{resources_dir}:resources"])
+        # Add sounds
+        sounds_dir = resources_dir / "sounds"
+        if sounds_dir.exists():
+            cmd.extend(["--add-data", f"{sounds_dir}:resources/sounds"])
+        
+        # Add icons
+        icons_dir = resources_dir / "icons"
+        if icons_dir.exists():
+            cmd.extend(["--add-data", f"{icons_dir}:resources/icons"])
     
-    print(f"  Running: {' '.join(cmd)}")
+    # Hidden imports for PySide6
+    cmd.extend([
+        "--hidden-import", "PySide6.QtCore",
+        "--hidden-import", "PySide6.QtGui", 
+        "--hidden-import", "PySide6.QtWidgets",
+        "--hidden-import", "PySide6.QtCharts",
+    ])
     
+    # Main script
+    cmd.append(str(main_script))
+    
+    print(f"  Running PyInstaller...")
     result = subprocess.run(cmd, cwd=ROOT)
     
     if result.returncode != 0:
@@ -133,72 +132,33 @@ def build_flet(target_platform: str):
     print("✅ Build successful!")
 
 
-def post_build(target_platform: str):
+def post_build():
     """Post-build tasks."""
-    dist_dir = ROOT / "dist"
+    app_path = ROOT / "dist" / f"{APP_NAME}.app"
     
-    if target_platform == "macos":
-        app_path = dist_dir / f"{APP_NAME}.app"
-        if app_path.exists():
-            print(f"📱 macOS app created: {app_path}")
-            print("\n  To install:")
-            print(f"    cp -r '{app_path}' /Applications/")
-            print("\n  Or drag to Applications folder in Finder")
-            
-    elif target_platform == "windows":
-        exe_path = dist_dir / f"{APP_NAME}.exe"
-        if exe_path.exists():
-            print(f"🪟 Windows executable created: {exe_path}")
-            print("\n  To create installer, use Inno Setup or NSIS")
-            
-    elif target_platform == "linux":
-        binary_path = dist_dir / APP_NAME.lower().replace(" ", "-")
-        if binary_path.exists():
-            print(f"🐧 Linux binary created: {binary_path}")
-            print("\n  To install system-wide:")
-            print(f"    sudo cp '{binary_path}' /usr/local/bin/")
-            print("\n  Or create an AppImage/Flatpak for distribution")
+    if app_path.exists():
+        print(f"\n📱 macOS app created: {app_path}")
+        print("\n  To install:")
+        print(f"    cp -r 'dist/{APP_NAME}.app' /Applications/")
+        print("\n  Or drag to Applications folder in Finder")
+        
+        # Show size
+        size = sum(f.stat().st_size for f in app_path.rglob('*') if f.is_file())
+        print(f"\n  App size: {size / 1024 / 1024:.1f} MB")
+    else:
+        print("⚠️  App bundle not found in expected location")
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Build Bear Alarm for distribution"
-    )
-    parser.add_argument(
-        "--platform",
-        choices=["macos", "windows", "linux"],
-        default=get_platform(),
-        help="Target platform (default: current platform)",
-    )
-    parser.add_argument(
-        "--clean",
-        action="store_true",
-        help="Clean build artifacts before building",
-    )
-    parser.add_argument(
-        "--no-build",
-        action="store_true",
-        help="Only clean, don't build",
-    )
-    
-    args = parser.parse_args()
-    
     print(f"🐻 Bear Alarm Build Script v{APP_VERSION}")
     print("=" * 50)
     
     os.chdir(ROOT)
     
-    if args.clean or args.no_build:
-        clean_build()
-    
-    if args.no_build:
-        print("✅ Clean complete")
-        return
-    
+    clean_build()
     check_dependencies()
-    copy_resources()
-    build_flet(args.platform)
-    post_build(args.platform)
+    build_macos()
+    post_build()
     
     print("\n" + "=" * 50)
     print("🎉 Build complete!")
@@ -206,4 +166,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

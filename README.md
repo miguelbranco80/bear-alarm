@@ -1,17 +1,18 @@
 # Bear Alarm 🐻
 
-A cross-platform glucose monitoring application for Type 1 Diabetes that connects to Dexcom Share and triggers audio alerts when glucose levels are out of range.
+A macOS glucose monitoring application for Type 1 Diabetes that connects to Dexcom Share and triggers audio alerts when glucose levels are out of range.
 
 ## ✨ Features
 
-- **Beautiful Desktop UI** - Modern Flet-based interface with dashboard, history charts, and settings
+- **Native macOS UI** - Built with Qt (PySide6) for a native experience
 - **Real-time Monitoring** - Connects to Dexcom Share API for live glucose data
-- **SNOOZE Button** - Silence alerts for 15min, 30min, 1hr, or 2hr at any time
+- **Smart Alerts** - Configurable thresholds with persistence timers
+- **Snooze** - Silence alerts for 15min, 30min, 1hr, or 2hr
 - **Historical Charts** - View glucose trends over 3h, 6h, 12h, 24h, 3d, or 7d
-- **SQLite Database** - Stores all readings locally for historical analysis
-- **Cross-Platform** - Runs on macOS, Windows, and Linux
-- **Configurable Thresholds** - Set your own low and high glucose limits
-- **Audio Alerts** - Customizable WAV or MP3 alert sounds
+- **Emergency Contacts** - Auto-message via iMessage on alerts
+- **FaceTime Integration** - Quick call buttons for emergency contacts
+- **Schedules** - Different alert rules for different times of day
+- **System Integration** - Prevents sleep while monitoring, volume warnings
 
 ## 🚀 Quick Start
 
@@ -22,7 +23,7 @@ Install [uv](https://astral.sh/uv) (fast Python package manager):
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-### Run
+### Run (Development)
 
 ```bash
 cd bear-alarm
@@ -30,119 +31,90 @@ uv sync
 uv run bear-alarm
 ```
 
-On first launch, you'll be prompted to configure your Dexcom credentials in the Settings tab.
+On first launch, configure your Dexcom credentials in the Settings tab.
 
 ## 📦 Build Standalone App
 
-Build a packaged application that doesn't require Python:
+Build a packaged `.app` that doesn't require Python:
 
 ```bash
-# macOS
-./scripts/build-macos.sh
+# Install PyInstaller if needed
+uv pip install pyinstaller
+
+# Build
+python scripts/build.py
+
+# Install
 cp -r "dist/Bear Alarm.app" /Applications/
-
-# Windows
-.\scripts\build-windows.ps1
-
-# Linux
-./scripts/build-linux.sh
 ```
 
 ## ⚙️ Configuration
 
-### GUI Configuration (Recommended)
+Settings are configured through the app's Settings and Rules tabs. Configuration is saved to:
 
-Settings are configured through the Settings tab in the app. Your configuration is automatically saved to:
+```
+~/Library/Application Support/BearAlarm/config.yaml
+```
 
-| Platform | Location |
-|----------|----------|
-| macOS | `~/Library/Application Support/BearAlarm/config.yaml` |
-| Windows | `%LOCALAPPDATA%\BearAlarm\config.yaml` |
-| Linux | `~/.local/share/bear-alarm/config.yaml` |
+### Environment Variables (optional)
 
-### Environment Variables
-
-For CLI mode or automation, set environment variables:
+For automation or CI:
 ```bash
 export DEXCOM_USERNAME="your_username"
 export DEXCOM_PASSWORD="your_password"
 export DEXCOM_OUS="true"  # if outside US
 ```
 
-### Configuration Options
-
-| Setting | Description | Default |
-|---------|-------------|---------|
-| **Dexcom Username** | Your Dexcom Share email | (required) |
-| **Dexcom Password** | Your Dexcom Share password | (required) |
-| **Outside US** | Use non-US Dexcom server | false |
-| **Low Threshold** | Alert when glucose ≤ this (mmol/L) | 3.9 |
-| **High Threshold** | Alert when glucose ≥ this (mmol/L) | 10.0 |
-| **Alert Interval** | Seconds between repeated alerts | 300 |
-| **Poll Interval** | Seconds between glucose checks | 300 |
-
 ## 📁 Project Structure
 
 ```
 bear-alarm/
 ├── src/
-│   ├── main.py              # Entry point
+│   ├── main_qt.py           # Qt app entry point
 │   ├── cli.py               # CLI mode (headless)
 │   ├── core/                # Business logic
-│   │   ├── config.py        # Configuration management
-│   │   ├── paths.py         # Path resolution (dev vs packaged)
-│   │   ├── dexcom_client.py
-│   │   ├── monitor.py
-│   │   └── alerts.py
+│   │   ├── config.py        # Configuration (Pydantic)
+│   │   ├── paths.py         # Path resolution
+│   │   ├── dexcom_client.py # Dexcom Share API
+│   │   ├── alerts.py        # Audio alerts
+│   │   ├── system.py        # macOS integration
+│   │   └── emergency.py     # FaceTime/iMessage
 │   ├── data/                # SQLite layer
 │   │   ├── database.py
 │   │   └── models.py
-│   └── ui/                  # Flet UI
-│       ├── app.py
+│   └── ui_qt/               # Qt UI
+│       ├── app.py           # Main window
 │       ├── theme.py
-│       └── views/
+│       └── views/           # Dashboard, History, etc.
 ├── resources/
-│   ├── defaults.yaml        # Default configuration
 │   ├── sounds/              # Alert audio files
 │   └── icons/               # App icons
-├── scripts/                 # Build scripts
+├── scripts/
+│   └── build.py             # macOS build script
 └── pyproject.toml
 ```
 
 ## 🗄️ Data Storage
 
-All data is stored in the user data directory:
-
-| Platform | Location |
-|----------|----------|
-| macOS | `~/Library/Application Support/BearAlarm/` |
-| Windows | `%LOCALAPPDATA%\BearAlarm\` |
-| Linux | `~/.local/share/bear-alarm/` |
+All data is stored in:
+```
+~/Library/Application Support/BearAlarm/
+```
 
 Contents:
 - `bear_alarm.db` - SQLite database with glucose readings
 - `config.yaml` - User configuration
 
-## 🔧 Troubleshooting
-
-### "Failed to authenticate with Dexcom Share"
-- Verify your Dexcom Share username and password
-- Ensure Dexcom Share is enabled in your mobile app
-- Enable "Outside US" if you're not in the United States
-
-### No glucose readings
-- Ensure CGM is active and transmitting
-- Check Share is enabled in Dexcom app
-- Verify someone is following the account
-
 ## 🖥️ CLI Mode
 
-For headless operation (servers, etc.):
+For headless operation (e.g., on a server):
 ```bash
 export DEXCOM_USERNAME="your_username"
 export DEXCOM_PASSWORD="your_password"
 uv run bear-alarm-cli
 ```
+
+Note: Audio alerts and iMessage/FaceTime features require macOS.
 
 ## ⚠️ Disclaimer
 
@@ -150,6 +122,6 @@ This software is not a medical device and should not replace proper medical care
 
 ## 🙏 Acknowledgments
 
-- [Flet](https://flet.dev/) - Cross-platform UI
+- [PySide6](https://doc.qt.io/qtforpython/) - Qt for Python
 - [pydexcom](https://github.com/gagebenne/pydexcom) - Dexcom API
 - [uv](https://astral.sh/uv) - Python package manager

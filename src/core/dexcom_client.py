@@ -28,18 +28,19 @@ class DexcomClient:
     robust error handling with automatic reconnection.
     """
 
-    def __init__(self, username: str, password: str, ous: bool = False):
+    def __init__(self, username: str, password: str, region: str = "us"):
         """
         Initialize Dexcom client.
 
         Args:
             username: Dexcom Share username
             password: Dexcom Share password
-            ous: True if outside US (uses different server)
+            region: Region code - 'us', 'ous' (outside US), or 'jp' (Japan)
         """
         self.username = username
         self.password = password
-        self.region = Region.OUS if ous else Region.US
+        region_map = {"us": Region.US, "ous": Region.OUS, "jp": Region.JP}
+        self.region = region_map.get(region.lower(), Region.US)
         self._client: Optional[Dexcom] = None
         self._last_connection_attempt = 0
         self._connection_retry_delay = 60  # seconds
@@ -113,10 +114,23 @@ class DexcomClient:
 
         for attempt in range(max_retries):
             try:
-                reading = self._client.get_current_glucose_reading()
+                # Get latest reading and check its age
+                reading = self._client.get_latest_glucose_reading()
+                if reading is None:
+                    logger.debug("No glucose reading available")
+                    return None
+                
+                # Check if reading is stale (older than 15 minutes)
+                from datetime import datetime, timezone
+                age = datetime.now(timezone.utc) - reading.datetime.replace(tzinfo=timezone.utc)
+                age_minutes = age.total_seconds() / 60
+                
+                if age_minutes > 15:
+                    logger.warning(f"Glucose reading is {age_minutes:.0f} minutes old - may be stale")
+                
                 logger.debug(
                     f"Got glucose reading: {reading.mmol_l:.1f} mmol/L "
-                    f"({reading.mg_dl} mg/dL) at {reading.datetime}"
+                    f"({reading.mg_dl} mg/dL) at {reading.datetime} ({age_minutes:.0f}m ago)"
                 )
                 return reading
 

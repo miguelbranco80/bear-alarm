@@ -130,3 +130,4 @@ def open_messages_app(phone: Optional[str] = None) -> bool:
         logger.error(f"Failed to open Messages: {e}")
         return False
 
+
