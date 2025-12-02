@@ -61,33 +61,6 @@ class SettingsView:
             ],
         )
         
-        # Alert thresholds section
-        alerts_section = self._create_section(
-            "Alert Thresholds",
-            [
-                self._create_slider(
-                    "alerts.low_threshold",
-                    "Low Glucose Threshold",
-                    self.config.alerts.low_threshold,
-                    min_val=2.0,
-                    max_val=5.0,
-                    divisions=30,
-                    unit="mmol/L",
-                    color=COLORS["glucose_low"],
-                ),
-                self._create_slider(
-                    "alerts.high_threshold",
-                    "High Glucose Threshold",
-                    self.config.alerts.high_threshold,
-                    min_val=8.0,
-                    max_val=20.0,
-                    divisions=24,
-                    unit="mmol/L",
-                    color=COLORS["glucose_high"],
-                ),
-            ],
-        )
-        
         # Alert sounds section
         sounds_section = self._create_section(
             "Alert Sounds",
@@ -109,7 +82,7 @@ class SettingsView:
                     min_val=1,
                     max_val=30,
                     divisions=29,
-                    unit="minutes",
+                    unit="min",
                     color=COLORS["secondary"],
                     is_integer=True,
                 ),
@@ -127,7 +100,7 @@ class SettingsView:
                     min_val=1,
                     max_val=15,
                     divisions=14,
-                    unit="minutes",
+                    unit="min",
                     color=COLORS["secondary"],
                     is_integer=True,
                 ),
@@ -138,13 +111,13 @@ class SettingsView:
                     min_val=0,
                     max_val=60,
                     divisions=12,
-                    unit="minutes",
+                    unit="min",
                     color=COLORS["text_muted"],
                     is_integer=True,
                 ),
                 self._create_slider(
                     "alerts.min_volume",
-                    "Minimum Volume Warning",
+                    "Volume Warning",
                     self.config.alerts.min_volume,
                     min_val=10,
                     max_val=100,
@@ -172,9 +145,17 @@ class SettingsView:
             content=ft.Column(
                 [
                     dexcom_section,
-                    alerts_section,
                     sounds_section,
                     monitoring_section,
+                    ft.Container(
+                        content=ft.Text(
+                            "💡 Glucose thresholds are configured in the Rules tab",
+                            size=SIZES["caption"],
+                            color=COLORS["text_muted"],
+                            text_align=ft.TextAlign.CENTER,
+                        ),
+                        alignment=ft.alignment.center,
+                    ),
                     save_button,
                     ft.Container(height=SPACING["xl"]),
                 ],
@@ -416,8 +397,6 @@ class SettingsView:
                 "ous": self._fields["dexcom.ous"].value,
             },
             "alerts": {
-                "low_threshold": round(self._fields["alerts.low_threshold"].value, 1),
-                "high_threshold": round(self._fields["alerts.high_threshold"].value, 1),
                 "low_alert_sound": self._fields["alerts.low_alert_sound"]["path"],
                 "high_alert_sound": self._fields["alerts.high_alert_sound"]["path"],
                 "alert_interval": int(self._fields["alerts.alert_interval"].value) * 60,
