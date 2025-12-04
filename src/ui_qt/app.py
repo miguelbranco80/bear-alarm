@@ -341,22 +341,23 @@ class BearAlarmApp(QMainWindow):
         
         now = datetime.now()
         
-        # Urgent low - immediate alert, bypasses snooze
-        if glucose_mmol <= urgent_low:
-            logger.critical(f"URGENT LOW: {glucose_mmol:.1f}")
-            self.alert_system.trigger_low_alert()
-            self._last_low_alert_start_time = now
-            self._last_high_alert_start_time = None
-            return
-        
-        # Check snooze
+        # Check snooze first - ALL alerts respect snooze (user has been informed)
         if self._is_snoozed and self._snooze_until:
             if now >= self._snooze_until:
                 self._is_snoozed = False
                 self._snooze_until = None
                 self._dashboard.update_snooze_state(None)
             else:
+                # Snoozed - no alerts
                 return
+        
+        # Urgent low - immediate alert (no persistence timer)
+        if glucose_mmol <= urgent_low:
+            logger.critical(f"URGENT LOW: {glucose_mmol:.1f}")
+            self.alert_system.trigger_low_alert()
+            self._last_low_alert_start_time = now
+            self._last_high_alert_start_time = None
+            return
         
         # Low glucose with persistence
         if glucose_mmol <= low:
