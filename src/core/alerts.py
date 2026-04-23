@@ -35,6 +35,7 @@ class AlertSystem:
         low_alert_sound: str,
         high_alert_sound: str,
         alert_interval: int = 300,
+        alert_repeat_count: int = 1,
     ):
         """
         Initialize alert system.
@@ -43,11 +44,13 @@ class AlertSystem:
             low_alert_sound: Path to audio file (WAV or MP3) for low glucose alerts
             high_alert_sound: Path to audio file (WAV or MP3) for high glucose alerts
             alert_interval: Seconds between repeated alerts
+            alert_repeat_count: How many times to play the sound each time (1-5)
         """
         # Resolve paths (handles both development and packaged modes)
         self.low_alert_sound = resolve_sound_path(low_alert_sound)
         self.high_alert_sound = resolve_sound_path(high_alert_sound)
         self.alert_interval = alert_interval
+        self.alert_repeat_count = max(1, min(5, alert_repeat_count))  # Clamp 1-5
 
         self._current_state = AlertState.NORMAL
         self._alert_thread: Optional[threading.Thread] = None
@@ -100,9 +103,9 @@ class AlertSystem:
         """Check if file is MP3 based on extension."""
         return sound_path.suffix.lower() in ['.mp3', '.mpeg']
 
-    def _play_sound(self, sound_path: Path) -> bool:
+    def _play_sound_once(self, sound_path: Path) -> bool:
         """
-        Play a sound file (WAV or MP3).
+        Play a sound file once (WAV or MP3).
 
         Args:
             sound_path: Path to audio file (WAV or MP3)
@@ -134,6 +137,33 @@ class AlertSystem:
         except Exception as e:
             logger.error(f"Failed to play sound {sound_path}: {e}")
             return False
+
+    def _play_sound(self, sound_path: Path) -> bool:
+        """
+        Play a sound file the configured number of times.
+
+        Args:
+            sound_path: Path to audio file (WAV or MP3)
+
+        Returns:
+            True if sound played successfully, False otherwise
+        """
+        for i in range(self.alert_repeat_count):
+            if self._stop_alert_event.is_set():
+                return False
+            
+            if not self._play_sound_once(sound_path):
+                return False
+            
+            # Wait between repeats (if more than one)
+            if i < self.alert_repeat_count - 1:
+                # Wait for sound to finish + small gap (estimate ~5 seconds per play)
+                for _ in range(50):  # 5 seconds in 0.1s chunks
+                    if self._stop_alert_event.is_set():
+                        return False
+                    time.sleep(0.1)
+        
+        return True
 
     def _alert_loop(self, alert_state: AlertState) -> None:
         """

@@ -116,6 +116,17 @@ class SettingsView(QWidget):
         self._high_sound_path = self.config.alerts.high_alert_sound
         sounds_layout.addLayout(high_sound_layout)
         
+        # Alert repeat count
+        repeat_layout = QHBoxLayout()
+        repeat_layout.addWidget(QLabel("Play Sound:"))
+        self._repeat_spin = QSpinBox()
+        self._repeat_spin.setRange(1, 5)
+        self._repeat_spin.setValue(self.config.alerts.alert_repeat_count)
+        self._repeat_spin.setSuffix(" time(s)")
+        repeat_layout.addWidget(self._repeat_spin)
+        repeat_layout.addStretch()
+        sounds_layout.addLayout(repeat_layout)
+        
         # Alert interval
         interval_layout = QHBoxLayout()
         interval_layout.addWidget(QLabel("Repeat Interval:"))
@@ -180,6 +191,7 @@ class SettingsView(QWidget):
         self._username.textChanged.connect(self._schedule_save)
         self._password.textChanged.connect(self._schedule_save)
         self._region.currentIndexChanged.connect(self._schedule_save)
+        self._repeat_spin.valueChanged.connect(self._schedule_save)
         self._interval_spin.valueChanged.connect(self._schedule_save)
         self._poll_spin.valueChanged.connect(self._schedule_save)
         self._delay_spin.valueChanged.connect(self._schedule_save)
@@ -218,6 +230,7 @@ class SettingsView(QWidget):
             "alerts": {
                 "low_alert_sound": self._low_sound_path,
                 "high_alert_sound": self._high_sound_path,
+                "alert_repeat_count": self._repeat_spin.value(),
                 "alert_interval": self._interval_spin.value() * 60,
                 "min_volume": self._volume_slider.value(),
             },
@@ -239,6 +252,7 @@ class SettingsView(QWidget):
         self._low_sound_label.setText(Path(config.alerts.low_alert_sound).name)
         self._high_sound_path = config.alerts.high_alert_sound
         self._high_sound_label.setText(Path(config.alerts.high_alert_sound).name)
+        self._repeat_spin.setValue(config.alerts.alert_repeat_count)
         self._interval_spin.setValue(config.alerts.alert_interval // 60)
         self._poll_spin.setValue(config.monitoring.poll_interval // 60)
         self._delay_spin.setValue(config.monitoring.startup_delay_minutes)

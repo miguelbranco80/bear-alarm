@@ -110,6 +110,7 @@ class BearAlarmApp(QMainWindow):
                     low_alert_sound=str(self.config.alerts.get_low_sound_path()),
                     high_alert_sound=str(self.config.alerts.get_high_sound_path()),
                     alert_interval=self.config.alerts.alert_interval,
+                    alert_repeat_count=self.config.alerts.alert_repeat_count,
                 )
                 logger.info("Alert system initialized")
             except Exception as e:
@@ -417,6 +418,8 @@ class BearAlarmApp(QMainWindow):
         self._is_snoozed = True
         self._snooze_until = datetime.now() + timedelta(minutes=minutes)
         self._dashboard.update_snooze_state(self._snooze_until)
+        # Stop any currently playing alarm immediately
+        self.alert_system.clear_alert()
         
         if self.alert_system:
             self.alert_system.clear_alert()

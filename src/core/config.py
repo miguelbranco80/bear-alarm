@@ -167,6 +167,9 @@ class AlertsConfig(BaseModel):
     high_alert_sound: str = Field(
         default="sounds/siren.mp3", description="Path to high alert sound file"
     )
+    alert_repeat_count: int = Field(
+        default=1, description="How many times to play the alert sound (1-5)", ge=1, le=5
+    )
     alert_interval: int = Field(
         default=300, description="Seconds between repeated alerts", gt=0
     )
@@ -329,6 +332,7 @@ def save_config(config: Config) -> None:
             "high_persist_minutes": config.alerts.high_persist_minutes,
             "low_alert_sound": config.alerts.low_alert_sound,
             "high_alert_sound": config.alerts.high_alert_sound,
+            "alert_repeat_count": config.alerts.alert_repeat_count,
             "alert_interval": config.alerts.alert_interval,
             "min_volume": config.alerts.min_volume,
             "schedules": [
