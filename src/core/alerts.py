@@ -200,6 +200,10 @@ class AlertSystem:
             self._alert_thread.join(timeout=2)
             self._alert_thread = None
 
+    def play_sound(self, sound_path: Path) -> bool:
+        """Play a sound file once, for preview/testing."""
+        return self._play_sound_once(sound_path)
+
     def trigger_low_alert(self) -> None:
         """Trigger low glucose alert."""
         if self._current_state == AlertState.LOW_ALERT:
